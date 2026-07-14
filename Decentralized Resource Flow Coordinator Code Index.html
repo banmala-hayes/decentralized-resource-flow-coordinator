@@ -1,0 +1,537 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Decentralized Resource Flow Coordinator</title>
+<script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
+
+<style>
+/* ——— COLORS ——— */
+:root {
+  --primary-navy: #1A2B49;
+  --accent-teal: #00A499;
+  --bg-light: #F4F6F9;
+  --card-white: #FFFFFF;
+  --text-dark: #333333;
+  --border-grey: #D1D5DB;
+}
+
+body {
+  font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+  background-color: var(--bg-light);
+  margin: 0;
+  padding: 0;
+  color: var(--text-dark);
+}
+
+/* ——— HEADER ——— */
+header {
+  background-color: var(--primary-navy);
+  color: white;
+  padding: 15px 30px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+}
+
+.header-title h1 {
+  margin: 0;
+  font-size: 22px;
+}
+
+.header-title p {
+  margin: 2px 0 0 0;
+  font-size: 12px;
+  color: #A0AEC0;
+}
+
+.sync-panel {
+  background: rgba(255,255,255,0.1);
+  padding: 10px 15px;
+  border-radius: 6px;
+  font-size: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  border: 1px solid rgba(255,255,255,0.2);
+}
+
+.sync-panel input {
+  padding: 4px 8px;
+  font-size: 11px;
+  border: none;
+  border-radius: 3px;
+}
+
+.sync-panel button {
+  background: var(--accent-teal);
+  color: white;
+  border: none;
+  padding: 4px 8px;
+  cursor: pointer;
+  border-radius: 3px;
+  font-weight: bold;
+}
+
+/* ——— LAYOUT ——— */
+.container {
+  padding: 25px;
+  max-width: 1600px;
+  margin: 0 auto;
+}
+
+.registration-panel {
+  background: var(--card-white);
+  padding: 20px;
+  border-radius: 8px;
+  margin-bottom: 25px;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+  display: flex;
+  align-items: flex-end;
+  gap: 15px;
+  border-top: 4px solid var(--accent-teal);
+}
+
+.form-group {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.form-group label {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--primary-navy);
+  text-transform: uppercase;
+}
+
+.form-group input.initial-input {
+  padding: 10px;
+  border: 1px solid var(--border-grey);
+  border-radius: 4px;
+  font-size: 14px;
+  width: 130px;
+  text-align: center;
+}
+
+button.btn-add {
+  background-color: var(--accent-teal);
+  color: white;
+  border: none;
+  padding: 11px 20px;
+  border-radius: 4px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.queue-board {
+  display: grid;
+  grid-template-columns: repeat(6, 1fr);
+  gap: 15px;
+}
+
+/* ——— LANES ——— */
+.lane {
+  background-color: #EBF0F5;
+  border-radius: 8px;
+  min-height: 500px;
+  padding: 15px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  border: 1px solid rgba(0,0,0,0.05);
+}
+
+.lane-header {
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--primary-navy);
+  border-bottom: 2px solid var(--border-grey);
+  padding-bottom: 8px;
+  margin-bottom: 5px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.lane-count {
+  background: var(--primary-navy);
+  color: white;
+  font-size: 11px;
+  padding: 2px 7px;
+  border-radius: 10px;
+}
+
+/* ——— RESOURCE TOKENS ——— */
+.patient-card {
+  background: var(--card-white);
+  border-left: 5px solid var(--primary-navy);
+  padding: 16px 12px;
+  border-radius: 6px;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+  cursor: grab;
+  user-select: none;
+  position: relative;
+}
+
+.patient-initials {
+  font-weight: 700;
+  font-size: 16px;
+  color: var(--primary-navy);
+}
+
+.timer {
+  margin-top: 6px;
+  font-size: 11px;
+  color: #555;
+  font-family: monospace;
+}
+
+.btn-checkout {
+  margin-top: 12px;
+  width: 100%;
+  background-color: #EF4444;
+  color: white;
+  border: none;
+  padding: 6px;
+  font-size: 11px;
+  font-weight: 600;
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+.lane.drag-over {
+  background-color: #DCE4EC;
+  border: 2px dashed var(--accent-teal);
+}
+</style>
+</head>
+<body>
+
+<header>
+  <div class="header-title">
+    <h1>Local-First Resource Engine</h1>
+    <p>Peer-to-Peer State & Workflow Synchronization Framework</p>
+  </div>
+
+  <div class="sync-panel">
+    <div><strong>Private Signaling Sync</strong></div>
+    <div id="sync-status" style="color:#FFC107;">Status: Standalone Mode</div>
+    <div style="display:flex; gap:5px;">
+      <input type="text" id="room-id-input" placeholder="Enter Room ID to Join">
+      <button onclick="initiateSync()">Connect / Host</button>
+    </div>
+  </div>
+</header>
+
+<div class="container">
+
+<div class="registration-panel">
+  <div class="form-group">
+    <label>Classification Type</label>
+    <input type="text" id="firstInitial" class="initial-input" placeholder="Type A">
+  </div>
+
+  <div class="form-group">
+    <label>Identifier Code #</label>
+    <input type="text" id="lastInitial" class="initial-input" placeholder="101">
+  </div>
+
+  <button class="btn-add" onclick="addTokenAction()">Initialize Token</button>
+</div>
+
+<div class="queue-board">
+
+  <div class="lane" id="ingest-lane" ondragover="allowDrop(event)" ondragenter="dragEnter(event)" ondragleave="dragLeave(event)" ondrop="drop(event)">
+    <div class="lane-header">
+      <span>Ingest / Intake</span>
+      <span class="lane-count" id="count-ingest-lane">0</span>
+    </div>
+  </div>
+
+  <div class="lane" id="processing-lane-1" ondragover="allowDrop(event)" ondragenter="dragEnter(event)" ondragleave="dragLeave(event)" ondrop="drop(event)">
+    <div class="lane-header">
+      <span>Processing Node Alpha</span>
+      <span class="lane-count" id="count-processing-lane-1">0</span>
+    </div>
+  </div>
+
+  <div class="lane" id="processing-lane-2" ondragover="allowDrop(event)" ondragenter="dragEnter(event)" ondragleave="dragLeave(event)" ondrop="drop(event)">
+    <div class="lane-header">
+      <span>Processing Node Beta</span>
+      <span class="lane-count" id="count-processing-lane-2">0</span>
+    </div>
+  </div>
+
+  <div class="lane" id="evaluation-lane" ondragover="allowDrop(event)" ondragenter="dragEnter(event)" ondragleave="dragLeave(event)" ondrop="drop(event)">
+    <div class="lane-header">
+      <span>Evaluation Hub</span>
+      <span class="lane-count" id="count-evaluation-lane">0</span>
+    </div>
+  </div>
+
+  <div class="lane" id="allocation-lane" ondragover="allowDrop(event)" ondragenter="dragEnter(event)" ondragleave="dragLeave(event)" ondrop="drop(event)">
+    <div class="lane-header">
+      <span>Resource Allocation</span>
+      <span class="lane-count" id="count-allocation-lane">0</span>
+    </div>
+  </div>
+
+  <div class="lane" id="dispatch-lane" ondragover="allowDrop(event)" ondragenter="dragEnter(event)" ondragleave="dragLeave(event)" ondrop="drop(event)">
+    <div class="lane-header">
+      <span>Dispatch / Logistics</span>
+      <span class="lane-count" id="count-dispatch-lane">0</span>
+    </div>
+  </div>
+
+</div>
+</div>
+
+<script>
+/* ——— GLOBALS ——— */
+let cardCounter = 0;
+let peer = null;
+let connections = [];
+let globalTimerInterval = null;
+
+/* ——— RENDER TOKEN CARD ——— */
+function renderTokenCard(id, label, targetLaneId, initTime, laneArrivalTime) {
+  const now = Date.now();
+  const initialized = initTime || now;
+  const arrival = laneArrivalTime || now;
+
+  const cardHtml = `
+    <div class="patient-card" id="${id}" draggable="true" ondragstart="drag(event)" 
+         data-initials="${label}" 
+         data-checkin="${initialized}" 
+         data-arrival="${arrival}">
+      <div class="patient-initials">${label}</div>
+      <div class="timer" id="timer-${id}">System Total: 00:00 | Step: 00:00</div>
+      <button class="btn-checkout" onclick="resolveTokenAction('${id}')">Archive Token State</button>
+    </div>
+  `;
+  document.getElementById(targetLaneId).insertAdjacentHTML('beforeend', cardHtml);
+  updateCounts();
+  ensureGlobalTimerRunning();
+}
+
+/* ——— DETERMINISTIC GLOBAL TICKER ENGINE ——— */
+function ensureGlobalTimerRunning() {
+  if (globalTimerInterval) return;
+
+  globalTimerInterval = setInterval(() => {
+    const cards = document.querySelectorAll('.patient-card');
+    if (cards.length === 0) {
+      clearInterval(globalTimerInterval);
+      globalTimerInterval = null;
+      return;
+    }
+
+    const now = Date.now();
+    cards.forEach(card => {
+      const checkin = parseInt(card.dataset.checkin);
+      const arrival = parseInt(card.dataset.arrival);
+
+      const totalSec = Math.floor((now - checkin) / 1000);
+      const stepSec = Math.floor((now - arrival) / 1000);
+
+      const format = (s) => String(Math.floor(s / 60)).padStart(2, '0') + ':' + String(s % 60).padStart(2, '0');
+      
+      const timerDisplay = document.getElementById(`timer-${card.id}`);
+      if (timerDisplay) {
+        timerDisplay.textContent = `Total: ${format(totalSec)} | Step: ${format(stepSec)}`;
+      }
+    });
+  }, 1000);
+}
+
+/* ——— INITIALIZE TOKEN ——— */
+function addTokenAction() {
+  const classInput = document.getElementById('firstInitial').value.trim();
+  const idInput = document.getElementById('lastInitial').value.trim();
+
+  if (!classInput || !idInput) {
+    alert('Please execute inputs for both Classification and Identifier fields.');
+    return;
+  }
+
+  const combinedLabel = `${classInput} - #${idInput}`;
+  cardCounter++;
+  const cardId = `token-${Date.now()}-${cardCounter}`;
+  const now = Date.now();
+
+  renderTokenCard(cardId, combinedLabel, 'ingest-lane', now, now);
+
+  document.getElementById('firstInitial').value = "";
+  document.getElementById('lastInitial').value = "";
+
+  broadcast({ 
+    type: 'ADD', 
+    id: cardId, 
+    initials: combinedLabel, 
+    laneId: 'ingest-lane', 
+    checkin: now, 
+    arrival: now 
+  });
+}
+
+/* ——— DRAG/DROP CRDT SIMULATION MECHANICS ——— */
+function drag(ev) {
+  ev.dataTransfer.setData("text/plain", ev.target.id);
+}
+
+function allowDrop(ev) {
+  ev.preventDefault();
+}
+
+function dragEnter(ev) {
+  ev.preventDefault();
+  const lane = ev.target.closest('.lane');
+  if (lane) lane.classList.add('drag-over');
+}
+
+function dragLeave(ev) {
+  const lane = ev.target.closest('.lane');
+  if (lane) lane.classList.remove('drag-over');
+}
+
+function drop(ev) {
+  ev.preventDefault();
+  const id = ev.dataTransfer.getData("text/plain");
+  const draggedElement = document.getElementById(id);
+  const targetLane = ev.target.closest('.lane');
+
+  if (targetLane && draggedElement) {
+    const now = Date.now();
+    draggedElement.dataset.arrival = now;
+    
+    targetLane.appendChild(draggedElement);
+    targetLane.classList.remove('drag-over');
+    updateCounts();
+
+    broadcast({ type: 'MOVE', id: id, laneId: targetLane.id, arrival: now });
+  }
+}
+
+/* ——— STATE ARCHIVAL (REMOVAL) ——— */
+function resolveTokenAction(cardId) {
+  const card = document.getElementById(cardId);
+  if (card && confirm("Archive token instance and clear metric logs from system tracking?")) {
+    card.remove();
+    updateCounts();
+    broadcast({ type: 'REMOVE', id: cardId });
+  }
+}
+
+/* ——— TELEMETRY METRIC AGGREGATION ——— */
+function updateCounts() {
+  const lanes = [
+    'ingest-lane',
+    'processing-lane-1',
+    'processing-lane-2',
+    'evaluation-lane',
+    'allocation-lane',
+    'dispatch-lane'
+  ];
+
+  lanes.forEach(laneId => {
+    const laneEl = document.getElementById(laneId);
+    if (laneEl) {
+      const totalCards = laneEl.querySelectorAll('.patient-card').length;
+      document.getElementById(`count-${laneId}`).innerText = totalCards;
+    }
+  });
+}
+
+/* ——— P2P SIGNALING ENGINE ——— */
+function initiateSync() {
+  const inputVal = document.getElementById('room-id-input').value.trim();
+
+  if (!peer) {
+    // Generate an isolated node identifier string
+    const peerId = inputVal ? null : 'node-' + Math.floor(1000 + Math.random() * 9000);
+    peer = new Peer(peerId);
+
+    peer.on('open', (id) => {
+      document.getElementById('sync-status').innerText = `Hosting Mesh Room ID: ${id}`;
+      document.getElementById('room-id-input').value = id;
+      document.getElementById('room-id-input').readOnly = true;
+
+      if (inputVal) connectToTarget(inputVal);
+    });
+
+    peer.on('connection', (conn) => {
+      setupConnectionHandlers(conn);
+      setTimeout(() => { sendCurrentState(conn); }, 1000);
+    });
+
+  } else if (inputVal) {
+    connectToTarget(inputVal);
+  }
+}
+
+function connectToTarget(targetId) {
+  const conn = peer.connect(targetId);
+  setupConnectionHandlers(conn);
+}
+
+function setupConnectionHandlers(conn) {
+  if (!connections.includes(conn)) connections.push(conn);
+
+  conn.on('open', () => {
+    document.getElementById('sync-status').innerText = "Status: Shared & Synced";
+    document.getElementById('sync-status').style.color = "#00A499";
+  });
+
+  conn.on('data', (data) => {
+    handleNetworkPayload(data);
+  });
+}
+
+function broadcast(payload) {
+  connections.forEach(conn => {
+    if (conn.open) conn.send(payload);
+  });
+}
+
+function sendCurrentState(conn) {
+  const cards = document.querySelectorAll('.patient-card');
+  cards.forEach(card => {
+    conn.send({
+      type: 'ADD',
+      id: card.id,
+      initials: card.dataset.initials,
+      laneId: card.parentElement.id,
+      checkin: card.dataset.checkin,
+      arrival: card.dataset.arrival
+    });
+  });
+}
+
+function handleNetworkPayload(data) {
+  if (data.type === 'ADD') {
+    if (!document.getElementById(data.id)) {
+      renderTokenCard(data.id, data.initials, data.laneId, data.checkin, data.arrival);
+    }
+  } else if (data.type === 'MOVE') {
+    const card = document.getElementById(data.id);
+    const targetLane = document.getElementById(data.laneId);
+    if (card && targetLane) {
+      card.dataset.arrival = data.arrival;
+      targetLane.appendChild(card);
+      updateCounts();
+    }
+  } else if (data.type === 'REMOVE') {
+    const card = document.getElementById(data.id);
+    if (card) {
+      card.remove();
+      updateCounts();
+    }
+  }
+}
+</script>
+
+</body>
+</html>
